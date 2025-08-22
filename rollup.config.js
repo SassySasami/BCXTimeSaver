@@ -8,7 +8,7 @@ import banner2 from 'rollup-plugin-banner2';
 const meta = `
 // ==UserScript==
 // @name         MonModBC
-// @namespace    https://github.com/SassySasami/BCTest/main
+// @namespace    https://github.com/SassySasami/BCXTimeSaver
 // @version      0.1.1
 // @description  Exemple de mod BC utilisant le Mod SDK
 // @author       Sassy
@@ -19,8 +19,8 @@ const meta = `
 // @match http://localhost:*/*
 // @grant        none
 // @run-at       document-start
-// @updateURL    https://raw.githubusercontent.com/SassySasami/BCTest/main/dist/mon-mod-bc.user.js
-// @downloadURL  https://raw.githubusercontent.com/SassySasami/BCTest/main/dist/mon-mod-bc.user.js
+// @updateURL    https://raw.githubusercontent.com/SassySasami/BCXTimeSaver/main/dist/mon-mod-bc.user.js
+// @downloadURL  https://raw.githubusercontent.com/SassySasami/BCXTimeSaver/main/dist/mon-mod-bc.user.js
 // ==/UserScript==
 `.trim();
 
