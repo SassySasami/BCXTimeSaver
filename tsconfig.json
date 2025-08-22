@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Bondage Club Mod - Userscript (Rollup)",
+  "compilerOptions": {
+    // Cible et modules
+    "target": "ES2021",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+
+    // API dispo (navigateur + ES)
+    "lib": ["DOM", "ES2021"],
+
+    // Qualité/compat
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // Emission gérée par Rollup
+    "noEmit": true,
+    "importHelpers": true,
+
+    // Désactive la sortie de types (évite l’erreur du plugin TS)
+    "declaration": false,
+    "declarationMap": false,
+    "composite": false,
+
+    // Options modernes et sûres
+    "sourceMap": false,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedSideEffectImports": true,
+
+    // Pas de types Node (on vise le navigateur)
+    "types": []
+  },
+  "include": ["src"],
+  "exclude": ["dist", "node_modules"]
+}
