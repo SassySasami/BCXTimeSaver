@@ -7,14 +7,15 @@ import bcModSDK from 'bondage-club-mod-sdk';
   // =============================
   // Enregistrement SDK (optionnel)
   // =============================
+  const MOD_NAME = 'MonModBC';
   try {
     const mod = bcModSDK.registerMod({
-      name: 'MonModBC',
+      name: MOD_NAME,
       fullName: 'Mon Mod Bondage Club',
-      version: '0.2.1',
+      version: '0.3.0',
       repository: 'https://github.com/SassySasami/BCTest',
     });
-    console.log('[MonModBC] Mod chargé via SDK-1', mod);
+    console.log('[MonModBC] Mod chargé via SDK:', mod);
   } catch (e) {
     console.warn('[MonModBC] SDK indisponible (non bloquant):', e);
   }
@@ -36,16 +37,20 @@ import bcModSDK from 'bondage-club-mod-sdk';
     'Pas de spam, flood ou publicité non autorisée.',
   ].join('\n');
 
-  type RuleItem = { id: string; name: string; description?: string; enabled: boolean; tags?: string[] };
-  type SubItem = { id: string; name: string };
+  type RuleStateLite = {
+    rule: string;
+    ruleDefinition?: { name?: string; description?: string } | null;
+    inEffect: boolean;
+    isEnforced: boolean;
+    isLogged: boolean;
+    customData?: unknown;
+    internalData?: unknown;
+  };
 
-  // =========================
-  // État (mémoire du module)
-  // =========================
+  // État local
   let panelVisible = true;
-  let allRules: RuleItem[] = [];
-  let ruleApi: any | null = null; // injecté par BCX si dispo
-  let presenceApi: any | null = null;
+  let bcxApi: any | null = null;
+  let currentRuleId = '';
 
   // =====================
   // Helpers de persistance
@@ -76,11 +81,7 @@ import bcModSDK from 'bondage-club-mod-sdk';
 
   function escapeHtml(s: string): string {
     const map: Record<string, string> = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#039;',
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
     };
     return s.replace(/[&<>"']/g, (m) => map[m] ?? m);
   }
@@ -141,7 +142,7 @@ import bcModSDK from 'bondage-club-mod-sdk';
         font: 13px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
         border: 1px solid #3a3a4a; border-radius: 10px;
         box-shadow: 0 10px 30px rgba(0,0,0,0.35);
-        width: 360px; user-select: none; display: none;
+        width: 380px; user-select: none; display: none;
       }
       #monmodbc-panel header {
         display: flex; align-items: center; gap: 8px; justify-content: space-between;
@@ -162,35 +163,26 @@ import bcModSDK from 'bondage-club-mod-sdk';
       .mmdbc-btn {
         background: #3a3a4a; color: #fff; border: 1px solid #555; border-radius: 8px; padding: 6px 10px; cursor: pointer;
       }
-      .mmdbc-select, .mmdbc-input {
+      .mmdbc-select, .mmdbc-input, .mmdbc-textarea {
         background: #11131a; color: #fff; border: 1px solid #3a3a4a; border-radius: 8px; padding: 6px 8px;
       }
-      #mmdbc-rules { max-height: 200px; overflow: auto; border: 1px solid #3a3a4a; border-radius: 8px; padding: 6px; background: #0d0f15; }
-      .mmdbc-rule { display: flex; align-items: center; gap: 8px; padding: 4px 2px; }
-      .mmdbc-rule .name { font-weight: 600; }
-      .mmdbc-rule .desc { opacity: .8; font-size: 12px; }
-      .mmdbc-status { font-size: 12px; opacity: .9; }
-      #monmodbc-mini {
-        position: fixed; top: 80px; right: 20px; z-index: 2147483647;
-        background: #2a2a3a; color: #fff; border: 1px solid #555; border-radius: 999px; padding: 8px 10px; cursor: pointer;
-        display: none;
-      }
+      #mmdbc-rule-box { border: 1px solid #3a3a4a; border-radius: 8px; padding: 8px; background: #0d0f15; }
+      .mmdbc-kv { display: grid; grid-template-columns: 120px 1fr; gap: 6px 10px; align-items: center; }
       .mmdbc-toast {
         position: fixed; bottom: 18px; left: 50%; transform: translate(-50%, 20px);
         background: #111; color: #fff; padding: 10px 14px; border-radius: 10px; opacity: 0;
         transition: opacity .2s ease, transform .2s ease; z-index: 2147483647;
       }
-      .mmdbc-switch { position: relative; width: 38px; height: 20px; display: inline-block; }
-      .mmdbc-switch input { display: none; }
-      .mmdbc-slider {
-        position: absolute; inset: 0; background: #444; border-radius: 20px; transition: .2s;
+      #monmodbc-mini {
+        position: fixed; top: 80px; right: 20px; z-index: 2147483647;
+        background: #2a2a3a; color: #fff; border: 1px solid #555; border-radius: 999px; padding: 8px 10px; cursor: pointer;
+        display: none;
       }
-      .mmdbc-slider:before {
-        content: ''; position: absolute; width: 16px; height: 16px; left: 2px; top: 2px;
-        background: #fff; border-radius: 50%; transition: .2s;
+      code.mmdbc {
+        display: block; white-space: pre-wrap; background: #0b0d13; border: 1px solid #33384d;
+        padding: 8px; border-radius: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
       }
-      input:checked + .mmdbc-slider { background: #4f46e5; }
-      input:checked + .mmdbc-slider:before { transform: translateX(18px); }
     `;
     document.head.appendChild(style);
   }
@@ -198,13 +190,17 @@ import bcModSDK from 'bondage-club-mod-sdk';
   // ====================
   // BCX adapter (safe)
   // ====================
-  function tryGetBCX(): { rule: any | null; presence: any | null } {
+  function tryGetBCX(): any | null {
     const w = window as unknown as Record<string, any>;
     const bcx = w.bcx ?? w.BCX ?? w.game?.addons?.get?.('BCX');
-    if (!bcx || typeof bcx.getModApi !== 'function') return { rule: null, presence: null };
-    const rule = bcx.getModApi('rule-manager');
-    const presence = bcx.getModApi('presence') ?? null;
-    return { rule: rule ?? null, presence };
+    if (!bcx || typeof bcx.getModApi !== 'function') return null;
+    try {
+      // On demande un ModAPI “scopé” à notre mod
+      const api = bcx.getModApi(MOD_NAME);
+      return api ?? null;
+    } catch {
+      return null;
+    }
   }
 
   // ===================
@@ -265,40 +261,51 @@ import bcModSDK from 'bondage-club-mod-sdk';
     rowBtns.append(btnSave, btnCopy, btnReset);
     body.appendChild(rowBtns);
 
-    // Ligne BCX (sélecteur subs + refresh + importer)
-    const rowSubs: HTMLDivElement = document.createElement('div');
-    rowSubs.className = 'mmdbc-row';
-    const selSubs: HTMLSelectElement = document.createElement('select');
-    selSubs.className = 'mmdbc-select'; selSubs.style.flex = '1 1 auto';
-    const btnRefresh: HTMLButtonElement = document.createElement('button');
-    btnRefresh.className = 'mmdbc-btn'; btnRefresh.textContent = 'Actualiser';
-    const btnImport: HTMLButtonElement = document.createElement('button');
-    btnImport.className = 'mmdbc-btn'; btnImport.textContent = 'Importer depuis ce sub';
-    rowSubs.append(selSubs, btnRefresh, btnImport);
-    body.appendChild(rowSubs);
+    // Section BCX — getRuleState + trigger
+    const ruleBox: HTMLDivElement = document.createElement('div');
+    ruleBox.id = 'mmdbc-rule-box';
+    body.appendChild(ruleBox);
 
-    // Recherche
-    const rowSearch: HTMLDivElement = document.createElement('div');
-    rowSearch.className = 'mmdbc-row';
-    const txtSearch: HTMLInputElement = document.createElement('input');
-    txtSearch.className = 'mmdbc-input'; txtSearch.placeholder = 'Rechercher une règle...';
-    txtSearch.style.flex = '1 1 auto';
-    rowSearch.appendChild(txtSearch);
-    body.appendChild(rowSearch);
+    const ruleForm: HTMLDivElement = document.createElement('div');
+    ruleForm.className = 'mmdbc-kv';
 
-    // Liste des règles
-    const rulesBox: HTMLDivElement = document.createElement('div');
-    rulesBox.id = 'mmdbc-rules';
-    body.appendChild(rulesBox);
+    const lblRule = document.createElement('label'); lblRule.textContent = 'Rule ID';
+    const inpRule: HTMLInputElement = document.createElement('input');
+    inpRule.className = 'mmdbc-input'; inpRule.placeholder = 'ex: no_outfit_removal'; inpRule.autocomplete = 'off';
 
-    // Status
-    const rowStatus: HTMLDivElement = document.createElement('div');
-    rowStatus.className = 'mmdbc-row';
-    const statusLabel: HTMLSpanElement = document.createElement('span');
-    statusLabel.className = 'mmdbc-status';
-    statusLabel.textContent = 'BCX: en attente...';
-    rowStatus.appendChild(statusLabel);
-    body.appendChild(rowStatus);
+    const lblTarget = document.createElement('label'); lblTarget.textContent = 'Target char (ID)';
+    const inpTarget: HTMLInputElement = document.createElement('input');
+    inpTarget.className = 'mmdbc-input'; inpTarget.placeholder = 'optionnel (nombre)'; inpTarget.type = 'number';
+
+    const lblDict = document.createElement('label'); lblDict.textContent = 'Dictionnaire';
+    const inpDict: HTMLTextAreaElement = document.createElement('textarea');
+    inpDict.className = 'mmdbc-textarea'; inpDict.rows = 3;
+    inpDict.placeholder = 'clé1=valeur1, clé2=valeur2';
+
+    const actionsRow = document.createElement('div');
+    actionsRow.className = 'mmdbc-row';
+    const btnFetch: HTMLButtonElement = document.createElement('button'); btnFetch.className = 'mmdbc-btn'; btnFetch.textContent = 'Obtenir état';
+    const btnTrigger: HTMLButtonElement = document.createElement('button'); btnTrigger.className = 'mmdbc-btn'; btnTrigger.textContent = 'Trigger';
+    const btnAttempt: HTMLButtonElement = document.createElement('button'); btnAttempt.className = 'mmdbc-btn'; btnAttempt.textContent = 'Trigger attempt';
+    actionsRow.append(btnFetch, btnTrigger, btnAttempt);
+
+    const outPre = document.createElement('code'); outPre.className = 'mmdbc'; outPre.textContent = 'BCX: en attente...';
+
+    ruleForm.append(
+      lblRule, inpRule,
+      lblTarget, inpTarget,
+      lblDict, inpDict,
+    );
+    ruleBox.append(ruleForm, actionsRow, outPre);
+
+    // Status simple
+    function setOutput(obj: unknown): void {
+      try {
+        outPre.textContent = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
+      } catch {
+        outPre.textContent = String(obj);
+      }
+    }
 
     // Drag + mini toggle
     makeDraggable(panel, header);
@@ -316,12 +323,8 @@ import bcModSDK from 'bondage-club-mod-sdk';
       showToast('Règles sauvegardées');
     });
     btnCopy.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(textArea.value);
-        showToast('Copié dans le presse-papiers');
-      } catch {
-        showToast('Copie impossible (permissions)');
-      }
+      try { await navigator.clipboard.writeText(textArea.value); showToast('Copié'); }
+      catch { showToast('Copie impossible'); }
     });
     btnReset.addEventListener('click', () => {
       titleInput.value = DEFAULT_TITLE;
@@ -331,178 +334,95 @@ import bcModSDK from 'bondage-club-mod-sdk';
       showToast('Rétabli');
     });
 
-    // ============
-    // BCX features
-    // ============
-    let busy = false;
-    function setBusy(b: boolean): void {
-      busy = b;
-      selSubs.disabled = b;
-      btnRefresh.disabled = b;
-      btnImport.disabled = b;
-      txtSearch.disabled = b;
-    }
-    function setStatus(msg: string, color = '#ccc'): void {
-      statusLabel.textContent = msg;
-      statusLabel.style.color = color;
+    // =================
+    // Intégration BCX
+    // =================
+    function parseDict(s: string): Record<string, string> {
+      const dict: Record<string, string> = {};
+      for (const part of s.split(',').map(p => p.trim()).filter(Boolean)) {
+        const idx = part.indexOf('=');
+        if (idx <= 0) continue;
+        const k = part.slice(0, idx).trim();
+        const v = part.slice(idx + 1).trim();
+        if (k) dict[k] = v;
+      }
+      return dict;
     }
 
-    function renderRules(rules: RuleItem[], filter: string): void {
-      rulesBox.innerHTML = '';
-      const f = filter.trim().toLowerCase();
-      const view = f
-        ? rules.filter(r =>
-            r.name.toLowerCase().includes(f) ||
-            (r.description ?? '').toLowerCase().includes(f) ||
-            (r.tags ?? []).some(t => t.toLowerCase().includes(f)))
-        : rules;
+    function safeNumberOrNull(v: string): number | null {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    }
 
-      if (view.length === 0) {
-        const p = document.createElement('div');
-        p.style.opacity = '0.7';
-        p.textContent = f ? 'Aucune règle ne correspond.' : 'Aucune règle à afficher.';
-        rulesBox.appendChild(p);
+    function getRuleStateLite(ruleId: string): RuleStateLite | string {
+      if (!bcxApi) return 'BCX non détecté.';
+      try {
+        const stateApi = bcxApi.getRuleState(ruleId);
+        if (!stateApi) return `Règle introuvable: "${ruleId}"`;
+        // Les getters renvoient des copies (cloneDeep côté BCX)
+        const data: RuleStateLite = {
+          rule: String(stateApi.rule ?? ruleId),
+          ruleDefinition: stateApi.ruleDefinition ?? null,
+          inEffect: !!stateApi.inEffect,
+          isEnforced: !!stateApi.isEnforced,
+          isLogged: !!stateApi.isLogged,
+          customData: stateApi.customData,
+          internalData: stateApi.internalData,
+        };
+        return data;
+      } catch (e) {
+        console.warn('[MonModBC] getRuleState a échoué:', e);
+        return 'Erreur lors de getRuleState (voir console).';
+      }
+    }
+
+    async function doTrigger(attempt: boolean): Promise<void> {
+      const ruleId = inpRule.value.trim();
+      if (!ruleId) { setOutput('Indique un Rule ID.'); return; }
+      if (!bcxApi) { setOutput('BCX non détecté.'); return; }
+
+      const target = inpTarget.value.trim();
+      const targetNum = target === '' ? null : safeNumberOrNull(target);
+      if (target !== '' && targetNum === null) {
+        setOutput('Target char doit être vide ou un nombre.');
         return;
       }
+      const dict = parseDict(inpDict.value);
 
-      for (const r of view) {
-        const row = document.createElement('div');
-        row.className = 'mmdbc-rule';
-        const label = document.createElement('label');
-        label.className = 'mmdbc-switch';
-        const input = document.createElement('input');
-        input.type = 'checkbox'; input.checked = !!r.enabled;
-        const slider = document.createElement('span');
-        slider.className = 'mmdbc-slider';
-        label.append(input, slider);
-
-        const meta = document.createElement('div');
-        const name = document.createElement('div');
-        name.className = 'name'; name.textContent = r.name || r.id;
-        const desc = document.createElement('div');
-        desc.className = 'desc';
-        desc.innerHTML = escapeHtml(r.description ?? '');
-        meta.append(name, desc);
-
-        row.append(label, meta);
-        rulesBox.appendChild(row);
-
-        input.addEventListener('change', async () => {
-          if (!ruleApi) { input.checked = !input.checked; return; }
-          setBusy(true);
-          try {
-            // API name fallback
-            const fn = ruleApi.setEnabled ?? ruleApi.setRuleEnabled ?? ruleApi.enableRule;
-            if (typeof fn !== 'function') throw new Error('Méthode setEnabled absente');
-            await Promise.resolve(fn.call(ruleApi, r.id, input.checked));
-            r.enabled = input.checked;
-            setStatus(`Règle ${r.name} ${input.checked ? 'activée' : 'désactivée'}.`, '#9fe89f');
-          } catch (err) {
-            console.warn('[MonModBC] setEnabled a échoué', err);
-            input.checked = !input.checked;
-            setStatus('Impossible de changer cette règle (droits ?).', '#f2a3a3');
-          } finally {
-            setBusy(false);
-          }
-        });
-      }
-    }
-
-    async function populateSubs(): Promise<void> {
-      selSubs.innerHTML = '';
-      const opt = document.createElement('option');
-      opt.value = ''; opt.textContent = ruleApi ? 'Choisir un sub...' : 'BCX non détecté';
-      selSubs.appendChild(opt);
-
-      const subs: SubItem[] = [];
       try {
-        const list = presenceApi?.listSubs?.() ?? presenceApi?.getSubs?.() ?? [];
-        const result = Array.isArray(list) ? list : await Promise.resolve(list);
-        for (const s of result as any[]) {
-          if (!s) continue;
-          const id = String(s.id ?? s.ID ?? s.name ?? '');
-          const name = String(s.name ?? s.id ?? s.ID ?? '');
-          if (!id) continue;
-          subs.push({ id, name });
-        }
+        const stateApi = bcxApi.getRuleState(ruleId);
+        if (!stateApi) { setOutput(`Règle introuvable: "${ruleId}"`); return; }
+        if (attempt) stateApi.triggerAttempt(targetNum, dict);
+        else stateApi.trigger(targetNum, dict);
+        setOutput(`OK: ${attempt ? 'triggerAttempt' : 'trigger'} envoyé pour "${ruleId}".`);
       } catch (e) {
-        console.warn('[MonModBC] Récupération subs a échoué', e);
-      }
-      for (const s of subs) {
-        const o = document.createElement('option');
-        o.value = s.id; o.textContent = s.name || s.id;
-        selSubs.appendChild(o);
-      }
-      setStatus(ruleApi ? `BCX OK — ${subs.length} sub(s) détecté(s).` : 'BCX non détecté.', ruleApi ? '#9fe89f' : '#f2a3a3');
-    }
-
-    async function refreshRules(): Promise<void> {
-      if (!ruleApi) { allRules = []; renderRules(allRules, txtSearch.value); return; }
-      setBusy(true);
-      try {
-        const fnList = ruleApi.listRules ?? ruleApi.getAll ?? ruleApi.getRules;
-        if (typeof fnList !== 'function') throw new Error('Méthode listRules absente');
-        const list = await Promise.resolve(fnList.call(ruleApi));
-        // normaliser
-        allRules = (Array.isArray(list) ? list : []).map((r: any) => ({
-          id: String(r.id ?? r.ID ?? r.key ?? r.name ?? ''),
-          name: String(r.name ?? r.id ?? r.ID ?? r.key ?? ''),
-          description: r.description ?? r.desc ?? '',
-          enabled: !!(r.enabled ?? r.active ?? r.on),
-          tags: Array.isArray(r.tags) ? r.tags : [],
-        })).filter(r => r.id);
-        renderRules(allRules, txtSearch.value);
-        setStatus(`${allRules.length} règle(s) chargée(s).`, '#9fe89f');
-      } catch (e) {
-        console.warn('[MonModBC] listRules a échoué', e);
-        setStatus('Impossible de lister les règles.', '#f2a3a3');
-      } finally {
-        setBusy(false);
+        console.warn('[MonModBC] trigger/attempt a échoué:', e);
+        setOutput('Erreur pendant trigger (voir console).');
       }
     }
 
-    async function importFromSelectedSub(): Promise<void> {
-      if (!ruleApi) { setStatus('BCX non détecté.', '#f2a3a3'); return; }
-      const subId = selSubs.value;
-      if (!subId) { setStatus('Choisis d’abord un sub.', '#f2a3a3'); return; }
-      setBusy(true);
-      try {
-        const fnImport = ruleApi.importFromSub ?? ruleApi.import ?? ruleApi.pullFromSub;
-        if (typeof fnImport !== 'function') throw new Error('Méthode importFromSub absente');
-        await Promise.resolve(fnImport.call(ruleApi, subId));
-        setStatus(`Import depuis « ${selSubs.options[selSubs.selectedIndex]?.textContent ?? subId} » réussi.`, '#9fe89f');
-        await refreshRules();
-      } catch (e) {
-        console.warn('[MonModBC] importFromSub a échoué', e);
-        setStatus('Échec de l’import (droits ?).', '#f2a3a3');
-      } finally {
-        setBusy(false);
+    // Boutons BCX
+    btnFetch.addEventListener('click', () => {
+      currentRuleId = inpRule.value.trim();
+      if (!currentRuleId) { setOutput('Indique un Rule ID.'); return; }
+      const res = getRuleStateLite(currentRuleId);
+      setOutput(res);
+    });
+    btnTrigger.addEventListener('click', async () => { await doTrigger(false); });
+    btnAttempt.addEventListener('click', async () => { await doTrigger(true); });
+
+    // Init BCX
+    function initBCX(): void {
+      bcxApi = tryGetBCX();
+      if (!bcxApi) {
+        setOutput('BCX non détecté. Ouvre le jeu avec BCX chargé.');
+      } else {
+        setOutput('BCX détecté. Saisis un Rule ID puis “Obtenir état”.');
       }
     }
-
-    async function initBCX(): Promise<void> {
-      const { rule, presence } = tryGetBCX();
-      ruleApi = rule;
-      presenceApi = presence;
-
-      if (!ruleApi) {
-        setStatus('BCX non détecté. Ouvre le jeu avec BCX chargé.', '#f2a3a3');
-        return;
-      }
-      setStatus('BCX détecté. Chargement des règles...', '#9fe89f');
-      await populateSubs();
-      await refreshRules();
-    }
-
-    // Events BCX
-    btnRefresh.addEventListener('click', async () => { await populateSubs(); });
-    btnImport.addEventListener('click', async () => { await importFromSelectedSub(); });
-    txtSearch.addEventListener('input', () => renderRules(allRules, txtSearch.value.trim()));
-
-    // Premier init (non bloquant pour la partie texte)
     initBCX();
 
-    // Alt+G pour toggle
+    // Raccourci Alt+G pour afficher/masquer
     window.addEventListener('keydown', (e) => {
       if (e.altKey && (e.key === 'g' || e.key === 'G')) {
         panelVisible = !panelVisible;
@@ -514,7 +434,7 @@ import bcModSDK from 'bondage-club-mod-sdk';
     // Afficher au premier montage
     updateVisibility();
 
-    console.log('[MonModBC] Panneau Règles BCX prêt.');
+    console.log('[MonModBC] Panneau prêt.');
   }
 
   // Monter le panneau quand le DOM est prêt
