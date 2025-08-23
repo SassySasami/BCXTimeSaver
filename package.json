@@ -12,6 +12,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "bc-stubs": "^119.0.0",
     "bondage-club-mod-sdk": "^1.2.0"
   },
   "devDependencies": {

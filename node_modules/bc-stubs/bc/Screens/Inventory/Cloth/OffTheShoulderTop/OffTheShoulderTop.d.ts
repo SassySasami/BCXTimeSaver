@@ -1,0 +1,1 @@
+declare function InventoryClothOffTheShoulderTopInitHook(data: ModularItemData, originalFunction: (C: Character, item: Item, push: boolean, refresh: boolean) => boolean, C: Character, item: Item, push: boolean, refresh: boolean): boolean;
