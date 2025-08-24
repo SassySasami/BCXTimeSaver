@@ -16,23 +16,28 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
 
-    // Emission gérée par Rollup
-    "noEmit": true,
-    "importHelpers": true,
+    // Emission: laissez TypeScript émettre pour que le plugin Rollup récupère le JS
+    "noEmit": false,
 
-    // Désactive la sortie de types (évite l’erreur du plugin TS)
+    // Helpers TS (si tu veux les factoriser, installe tslib et mets true)
+    "importHelpers": false,
+
+    // Pas de sorties de types
     "declaration": false,
     "declarationMap": false,
     "composite": false,
 
-    // Options modernes et sûres
+    // Options modernes
     "sourceMap": false,
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
     "moduleDetection": "force",
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
-    "noUncheckedSideEffectImports": true,
+
+    // Sortie sans BOM pour l’en‑tête Userscript, et LF
+    "emitBOM": false,
+    "newLine": "lf",
 
     // Pas de types Node (on vise le navigateur)
     "types": []

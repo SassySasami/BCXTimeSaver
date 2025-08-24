@@ -1,32 +1,36 @@
-// rollup.config.js
+// rollup.config.js (ESM)
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import resolve from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
 import typescript from '@rollup/plugin-typescript';
 import { terser } from 'rollup-plugin-terser';
-import fs from 'node:fs';
-import path from 'node:path';
 
-// Lis package.json pour alimenter la métadonnée
-const pkg = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8'));
+// --- utils
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const readJSON = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));
+const pkg = readJSON(path.join(__dirname, 'package.json'));
 
-// Utilise le nom lisible si disponible, sinon "MonModBC"
-const NAME = pkg.userscriptName || 'MonModBC';
-const AUTHOR = (pkg.author && (typeof pkg.author === 'string' ? pkg.author : pkg.author.name)) || 'Sassy';
-const NAMESPACE = 'https://github.com/SassySasami/BCXTimeSaver';
+// Fallbacks to keep header robust even if fields are missing
+const NAME = pkg.userscript?.name || pkg.displayName || pkg.name || 'MonModBC';
+const NAMESPACE = pkg.userscript?.namespace || pkg.repository?.url || `https://github.com/${pkg.author || 'you'}/${pkg.name || 'repo'}`;
 const VERSION = pkg.version || '0.0.0';
+const DESCRIPTION = pkg.description || 'BCX mod/userscript';
+const AUTHOR = (typeof pkg.author === 'string' ? pkg.author : pkg.author?.name) || 'Anonymous';
 
-// IMPORTANT: les URLs doivent pointer vers le .user.js final
-const RAW = 'https://raw.githubusercontent.com/SassySasami/BCXTimeSaver/main/dist/mon-mod-bc.user.js';
+// Update/Download URLs: point to RAW by default (works with Tampermonkey auto-update)
+const RAW_BASE = pkg.userscript?.rawBase
+  || `https://raw.githubusercontent.com/SassySasami/BCXTimeSaver/main/dist/mon-mod-bc.user.js`;
 
-// Astuce: vous pouvez aussi servir via jsDelivr (souvent des headers cache plus propres)
-// const CDN = 'https://cdn.jsdelivr.net/gh/SassySasami/BCXTimeSaver@main/dist/mon-mod-bc.user.js';
-
-const META_BLOCK = `
+const header = String.raw`
 // ==UserScript==
 // @name         ${NAME}
 // @namespace    ${NAMESPACE}
 // @version      ${VERSION}
-// @description  Exemple de mod BC utilisant le Mod SDK
+// @description  ${DESCRIPTION}
 // @author       ${AUTHOR}
 // @match        https://*.bondageprojects.elementfx.com/R*/*
 // @match        https://*.bondage-europe.com/R*/*
@@ -35,49 +39,69 @@ const META_BLOCK = `
 // @match        http://localhost:*/*
 // @grant        none
 // @run-at       document-start
-// @updateURL    ${RAW}
-// @downloadURL  ${RAW}
-// @supportURL   ${NAMESPACE}/issues
+// @updateURL    ${RAW_BASE}
+// @downloadURL  ${RAW_BASE}
 // ==/UserScript==
-`.trim() + '\n';
+`.trim(); // IMPORTANT: no leading whitespace/BOM before this in output
 
+// Extra safety: ensure TS doesn’t emit BOM; enforce LF at source level via tsconfig.json
+const tsPlugin = typescript({
+  tsconfig: './tsconfig.json',
+  sourceMap: false,
+});
+
+// Minimal plugin set
 const basePlugins = [
   resolve({ browser: true }),
   commonjs(),
-  // Assure qu'on n'émet pas de BOM en tête (BOM casserait la détection Userscript)
-  typescript({ tsconfig: './tsconfig.json', sourceMap: false }),
+  tsPlugin,
   terser(),
 ];
 
-/** Config commune: met la bannière en tout premier via output.banner */
-const userscriptOutput = {
-  file: 'dist/mon-mod-bc.user.js',
-  format: 'iife',
-  name: 'MonModBCBundle',
-  sourcemap: false,
-  banner: META_BLOCK,
-};
-
-const iifeOutput = {
-  file: 'dist/mon-mod-bc.iife.js',
-  format: 'iife',
-  name: 'MonModBCBundle',
-  sourcemap: false,
-  // on peut aussi mettre la bannière ici si tu veux la même en-tête dans la version iife
-  // banner: META_BLOCK,
-};
-
+/**
+ * Two outputs:
+ * 1) dist/mon-mod-bc.user.js → IIFE + Userscript header (install this in Tampermonkey)
+ * 2) dist/mon-mod-bc.iife.js → IIFE only (no header), useful for embedding
+ */
 export default [
+  // Userscript build (with header)
   {
     input: 'src/main.ts',
-    output: userscriptOutput,
+    output: {
+      file: 'dist/mon-mod-bc.user.js',
+      format: 'iife',
+      name: 'MonModBCBundle',
+      sourcemap: false,
+      banner: header, // Rollup guarantees this is the first bytes of the file
+      // No intro/outro to avoid anything before the banner
+      intro: '',
+      outro: '',
+    },
     plugins: basePlugins,
     treeshake: true,
+    onwarn(warning, warn) {
+      // Hide "THIS_IS_UNDEFINED" noise; surface everything else
+      if (warning.code === 'THIS_IS_UNDEFINED') return;
+      warn(warning);
+    },
   },
+
+  // Plain IIFE (no Userscript header)
   {
     input: 'src/main.ts',
-    output: iifeOutput,
+    output: {
+      file: 'dist/mon-mod-bc.iife.js',
+      format: 'iife',
+      name: 'MonModBCBundle',
+      sourcemap: false,
+      intro: '',
+      outro: '',
+    },
     plugins: basePlugins,
     treeshake: true,
+    onwarn(warning, warn) {
+      if (warning.code === 'THIS_IS_UNDEFINED') return;
+      warn(warning);
+    },
   },
 ];
