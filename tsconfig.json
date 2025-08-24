@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "display": "Bondage Club Mod - Userscript (Rollup)",
+  "display": "BCXTimeSaver",
   "compilerOptions": {
     // Cible et modules
     "target": "ES2021",
