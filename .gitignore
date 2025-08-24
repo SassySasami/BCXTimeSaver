@@ -1,0 +1,55 @@
+# --- Node / toolchains ---
+node_modules/
+.pnpm-store/
+.npm/
+.parcel-cache/
+.eslintcache
+.stylelintcache
+
+# --- Builds / artifacts ---
+dist/
+.build/
+.out/
+.rollup.cache/
+.vite/
+coverage/
+*.map
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# --- Logs ---
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Env files (garde un .env.example versionné) ---
+.env
+.env.*.local
+
+# --- Editors / IDEs ---
+.vscode/
+.idea/
+*.sw?
+*.swo
+*.swn
+
+# --- OS cruft ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# --- Misc ---
+*.local
+*.tmp
+*.bak
+*.orig
+*.rej
+
+# Si tu préfères NE PAS versionner le lockfile, décommente l’une des lignes ci-dessous
+# package-lock.json
+# pnpm-lock.yaml
+# yarn.lock
