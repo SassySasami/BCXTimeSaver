@@ -42,6 +42,6 @@
     // Pas de types Node (on vise le navigateur)
     "types": []
   },
-  "include": ["src"],
+  "include": ["src","src/**/*.ts","src/**/*.d.ts"],
   "exclude": ["dist", "node_modules"]
 }

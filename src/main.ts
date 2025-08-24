@@ -7,7 +7,7 @@ async function bootstrap() {
   const ui = buildUI();
 
   try {
-    const api = await waitForBCX(20000, window);
+    const api = await waitForBCX(20000, 'BCXTimeSaver');
     ui.status.textContent = "BCX détecté. Récupération de toutes les règles…";
 
     let allRules = await enumerateAllRules(api);
