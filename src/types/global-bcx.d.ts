@@ -1,21 +1,17 @@
-// src/types/global-bcx.d.ts
+// src/types/global.d.ts
 export {};
 
-// IMPORTANT: on réutilise le BCXApi défini dans src/types.ts
-import type { BCXApi as LocalBCXApi } from '../types';
-
 declare global {
-  // Le BCXApi global EST le BCXApi local (src/types.ts)
-  interface BCXApi extends LocalBCXApi {}
-
   interface BCXHost {
-    getModApi(name: string): BCXApi | null | undefined;
+    getModApi?: (name: string) => any | null | undefined;
+    getModuleApi?: (name: string) => any | null | undefined;
+    [k: string]: any;
   }
 
   interface Window {
-    BCX?: BCXHost;
+    bcx?: BCXHost; // minuscule
+    BCX?: BCXHost; // majuscule (au cas où)
+    unsafeWindow?: Window; // userscript environnements
+    wrappedJSObject?: Window; // Firefox
   }
-
-  // Userscript (Tamper/Greasemonkey)
-  const unsafeWindow: (Window & typeof globalThis) | undefined;
 }

@@ -1,5 +1,5 @@
 // src/main.ts
-import { waitForBCX } from "./bcx";
+import { getBCXApi } from './bcx';
 import { buildUI, renderRules } from "./ui";
 import { enumerateAllRules } from "./rules";
 
@@ -7,7 +7,7 @@ async function bootstrap() {
   const ui = buildUI();
 
   try {
-    const api = await waitForBCX(20000, 'BCXTimeSaver');
+    const api = await getBCXApi('BCX Time Saver', 30000); // mets le nom réel de ton add‑on
     ui.status.textContent = "BCX détecté. Récupération de toutes les règles…";
 
     let allRules = await enumerateAllRules(api);
