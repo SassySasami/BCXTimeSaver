@@ -1,93 +1,84 @@
 // sdk.ts
 const MOD_ID = 'BCXTimeSaver';
 const FULL_NAME = 'BCX Time Saver';
-const VERSION = '0.1.3';
+const VERSION = '0.1.4';
 
-type Ctx = { sdk: any; bcx: any; api: any; MOD_ID: string; FULL_NAME: string; VERSION: string } | null;
+let registered = false;
+let gotSDK = false;
+let gotBCX = false;
 
-function whenGlobal<T = any>(prop: string, timeout = 60000): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const w = window as any;
-    if (w[prop]) return resolve(w[prop]);
-
-    let done = false;
-    const t0 = Date.now();
-
-    // Poll doux
-    const it = setInterval(() => {
-      if (w[prop]) finish(w[prop]);
-      else if (Date.now() - t0 > timeout) finish(null, new Error(`timeout waiting for ${prop}`));
-    }, 200);
-
-    // Hook: si la propriété est définie plus tard
-    try {
-      const desc = Object.getOwnPropertyDescriptor(w, prop);
-      if (!desc || desc.configurable) {
-        let value: any = undefined;
-        Object.defineProperty(w, prop, {
-          configurable: true,
-          enumerable: true,
-          get() { return value; },
-          set(v) { value = v; finish(v); },
-        });
-      }
-    } catch { /* silencieux */ }
-
-    function finish(val: any, err?: Error) {
-      if (done) return;
-      done = true;
-      clearInterval(it);
-      if (err) reject(err);
-      else resolve(val);
-    }
-  });
-}
-
-async function getBCXApi(modId: string, max = 60000) {
+function tryRegister() {
   const w = window as any;
-  const start = Date.now();
-
-  // Attends que ModSDK et bcx existent (sans échouer l’app au premier timeout)
-  try { await whenGlobal('ModSDK', max); } catch (e) { console.warn('[%s] %s', modId, (e as Error).message); }
-  try { await whenGlobal('bcx', Math.max(0, max - (Date.now() - start))); } catch (e) { console.warn('[%s] %s', modId, (e as Error).message); }
-
+  if (registered) return;
   const sdk = w.ModSDK;
   const bcx = w.bcx;
-  if (!sdk || !bcx) return null;
+  gotSDK = !!sdk;
+  gotBCX = !!bcx;
+  if (!sdk || !bcx) return;
 
-  // Enregistre le mod si absent
-  const has = Array.isArray(sdk.getModsInfo?.()) && sdk.getModsInfo().some((m: any) => m?.name === modId);
-  if (!has) {
-    sdk.registerMod?.({
-      name: modId,
-      fullName: FULL_NAME,
-      version: VERSION,
-      repository: 'https://github.com/SassySasami/BCXTimeSaver',
-    });
+  // S’enregistrer si besoin
+  try {
+    const list = Array.isArray(sdk.getModsInfo?.()) ? sdk.getModsInfo() : [];
+    const has = list.some((m: any) => m?.name === MOD_ID);
+    if (!has) sdk.registerMod?.({ name: MOD_ID, fullName: FULL_NAME, version: VERSION });
+  } catch (e) {
+    // silencieux: on réessaiera
   }
 
-  // Récupère l’API BCX au nom du mod (certains BCX acceptent sans arg, on tente les deux)
+  // Récupérer l’API (peut throw si trop tôt)
   try {
-    return { sdk, bcx, api: bcx.getModApi?.(modId) ?? bcx.getModApi?.(), MOD_ID, FULL_NAME, VERSION };
-  } catch {
-    // Si l’appel jette alors que bcx vient juste d’arriver, on réessaie un peu
-    for (let i = 0; i < 20; i++) {
-      await new Promise(r => setTimeout(r, 200));
-      try { return { sdk, bcx, api: bcx.getModApi?.(modId) ?? bcx.getModApi?.(), MOD_ID, FULL_NAME, VERSION }; }
-      catch { /* retry */ }
+    const api = bcx.getModApi?.(MOD_ID) ?? bcx.getModApi?.();
+    if (api) {
+      registered = true;
+      console.debug('[%s] enregistré sur ModSDK/BCX', MOD_ID);
+      // Optionnel: notifier le reste du code
+      window.dispatchEvent(new CustomEvent('BCX_MOD_READY', { detail: { MOD_ID, api } }));
     }
-    return null;
+  } catch {
+    // pas prêt: réessaiera
   }
 }
 
-export async function initSDK(): Promise<Ctx> {
-  const ctx = await getBCXApi(MOD_ID, 60000);
-  if (!ctx || !ctx.api) {
-    console.warn('[%s] BCX API non disponible pour l’instant. Le mod restera en veille et réessaiera quand bcx/modsdk apparaîtront.', MOD_ID);
-
-    // Fallback: retente automatiquement dès que l’un des globals est défini
-    setTimeout(() => initSDK().catch(() => {}), 2000);
-    return null;
+// Hook “apparition tardive” d’une propriété globale (si possible)
+function hookGlobal(prop: 'ModSDK' | 'bcx') {
+  const w = window as any;
+  try {
+    const desc = Object.getOwnPropertyDescriptor(w, prop);
+    if (!desc || desc.configurable) {
+      let value: any = w[prop];
+      Object.defineProperty(w, prop, {
+        configurable: true,
+        enumerable: true,
+        get() { return value; },
+        set(v) { value = v; setTimeout(tryRegister, 0); },
+      });
+    }
+  } catch {
+    // Certains defineProperty échouent: pas grave, le polling couvrira le cas
   }
-  return ctx;
+}
+
+export function registerModSyncish(options?: { quiet?: boolean; maxMs?: number }) {
+  const { quiet = true, maxMs = 120000 } = options || {};
+
+  // 1) tentative immédiate
+  tryRegister();
+
+  if (registered) return;
+
+  // 2) hooks + polling léger
+  hookGlobal('ModSDK');
+  hookGlobal('bcx');
+
+  const start = Date.now();
+  const it = setInterval(() => {
+    tryRegister();
+    if (registered || Date.now() - start > maxMs) {
+      clearInterval(it);
+      if (!quiet && !registered) console.warn('[%s] ModSDK/BCX indisponible après %d ms', MOD_ID, maxMs);
+    }
+  }, 200);
+
+  // 3) fallback: à la fin du chargement de la page, retenter
+  window.addEventListener('load', () => setTimeout(tryRegister, 0));
 }

@@ -2,15 +2,13 @@
 import { getBCXApi } from './bcx';
 import { buildUI, renderRules } from "./ui";
 import { enumerateAllRules } from "./rules";
-import { initSDK } from './sdk';
 import bcModSDK from 'bondage-club-mod-sdk';
+
+bcModSDK.registerMod({ name: 'BCXTimeSaver', fullName: 'BCX Time Saver', version: '0.1.4' });
+
 
 async function bootstrap() {
   const ui = buildUI();
-  ui.status.textContent = "Initialisation du SDK…";
-  const ctx = await initSDK();
-  if (!ctx) return; // reste silencieux si pas prêt
-  const { api, MOD_ID } = ctx;
 
   try {
     const api = await getBCXApi("BCXTimeSaver", 30000); // mets le nom réel de ton add‑on
