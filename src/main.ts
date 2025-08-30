@@ -9,14 +9,11 @@ async function bootstrap() {
   const ui = buildUI();
   ui.status.textContent = "Initialisation du SDK…";
   const ctx = await initSDK();
-  if (!ctx) return;
-
+  if (!ctx) return; // reste silencieux si pas prêt
   const { api, MOD_ID } = ctx;
 
-  
   try {
-
-    const api = await getBCXApi('MOD_NAME', 30000); // mets le nom réel de ton add‑on
+    const api = await getBCXApi("BCXTimeSaver", 30000); // mets le nom réel de ton add‑on
     ui.status.textContent = "BCX détecté. Récupération de toutes les règles…";
 
     let allRules = await enumerateAllRules(api);
