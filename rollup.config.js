@@ -17,7 +17,7 @@ const meta = `// ==UserScript==
 // @inject-into  page
 // @grant        none
 // @updateURL    https://raw.githubusercontent.com/SassySasami/BCXTimeSaver/main/dist/mon-mod-bc.user.js
-// @downloadURL  https://cdn.jsdelivr.net/gh/SassySasami/BCXTimeSaver@main/dist/mon-mod-bc.user.js
+// @downloadURL  https://raw.githubusercontent.com/SassySasami/BCXTimeSaver/main/dist/mon-mod-bc.user.js
 // @homepageURL  https://github.com/SassySasami/BCXTimeSaver
 // @supportURL   https://github.com/SassySasami/BCXTimeSaver/issues
 // @license      MIT
