@@ -3,9 +3,13 @@ import { getBCXApi } from './bcx';
 import { buildUI, renderRules } from "./ui";
 import { enumerateAllRules } from "./rules";
 import bcModSDK from 'bondage-club-mod-sdk';
+import { bootBCXMod } from './bcx-attach';
 
-bcModSDK.registerMod({ name: 'BCXTimeSaver', fullName: 'BCX Time Saver', version: '0.1.4' });
-
+bootBCXMod(bcModSdk);
+window.addEventListener('BCX_MOD_READY', (ev: any) => {
+  const api = ev.detail.api;
+  // TODO: ton code qui utilise l’API BCX
+});
 
 async function bootstrap() {
   const ui = buildUI();
