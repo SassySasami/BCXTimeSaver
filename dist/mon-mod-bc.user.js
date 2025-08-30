@@ -62,7 +62,7 @@
      * @param addonName Nom exact de ton add‑on (ex: 'BCX Time Saver').
      * @param timeoutMs Délai max en ms (par défaut 30s).
      */
-    async function getBCXApi(addonName, timeoutMs = 30000) {
+    async function getBCXApi$1(addonName, timeoutMs = 30000) {
         const start = Date.now();
         const attempt = () => {
             const { host } = findHostNow();
@@ -287,71 +287,105 @@
         return Array.from(new Set(arr));
     }
 
-    // src/sdk.ts
-    const MOD_ID = 'BCXTimeSaver'; // identifiant sans espace (obligatoire côté SDK)
-    const FULL_NAME = 'BCX Time Saver'; // label humain
-    const VERSION = '0.1.2';
-    function waitFor(cond, interval = 150, timeout = 15000) {
+    // sdk.ts
+    const MOD_ID = 'BCXTimeSaver';
+    const FULL_NAME = 'BCX Time Saver';
+    const VERSION = '0.1.3';
+    function whenGlobal(prop, timeout = 60000) {
         return new Promise((resolve, reject) => {
+            const w = window;
+            if (w[prop])
+                return resolve(w[prop]);
+            let done = false;
             const t0 = Date.now();
+            // Poll doux
             const it = setInterval(() => {
-                try {
-                    if (cond()) {
-                        clearInterval(it);
-                        resolve();
-                        return;
-                    }
+                if (w[prop])
+                    finish(w[prop]);
+                else if (Date.now() - t0 > timeout)
+                    finish(null, new Error(`timeout waiting for ${prop}`));
+            }, 200);
+            // Hook: si la propriété est définie plus tard
+            try {
+                const desc = Object.getOwnPropertyDescriptor(w, prop);
+                if (!desc || desc.configurable) {
+                    let value = undefined;
+                    Object.defineProperty(w, prop, {
+                        configurable: true,
+                        enumerable: true,
+                        get() { return value; },
+                        set(v) { value = v; finish(v); },
+                    });
                 }
-                catch { }
-                if (Date.now() - t0 > timeout) {
-                    clearInterval(it);
-                    reject(new Error('timeout'));
-                }
-            }, interval);
+            }
+            catch { /* silencieux */ }
+            function finish(val, err) {
+                if (done)
+                    return;
+                done = true;
+                clearInterval(it);
+                if (err)
+                    reject(err);
+                else
+                    resolve(val);
+            }
         });
     }
-    async function initSDK() {
-        await waitFor(() => window.ModSDK && window.bcx);
-        const sdk = window.ModSDK;
-        const bcx = window.bcx;
-        const already = Array.isArray(sdk.getModsInfo?.()) && sdk.getModsInfo().some((m) => m?.name === MOD_ID);
-        if (!already) {
+    async function getBCXApi(modId, max = 60000) {
+        const w = window;
+        const start = Date.now();
+        // Attends que ModSDK et bcx existent (sans échouer l’app au premier timeout)
+        try {
+            await whenGlobal('ModSDK', max);
+        }
+        catch (e) {
+            console.warn('[%s] %s', modId, e.message);
+        }
+        try {
+            await whenGlobal('bcx', Math.max(0, max - (Date.now() - start)));
+        }
+        catch (e) {
+            console.warn('[%s] %s', modId, e.message);
+        }
+        const sdk = w.ModSDK;
+        const bcx = w.bcx;
+        if (!sdk || !bcx)
+            return null;
+        // Enregistre le mod si absent
+        const has = Array.isArray(sdk.getModsInfo?.()) && sdk.getModsInfo().some((m) => m?.name === modId);
+        if (!has) {
             sdk.registerMod?.({
-                name: MOD_ID, // ← doit rester identique à MOD_ID
+                name: modId,
                 fullName: FULL_NAME,
                 version: VERSION,
                 repository: 'https://github.com/SassySasami/BCXTimeSaver',
             });
         }
-        // Obtenir l’API BCX au nom du mod
-        let api;
+        // Récupère l’API BCX au nom du mod (certains BCX acceptent sans arg, on tente les deux)
         try {
-            api = bcx.getModApi?.(MOD_ID);
+            return { sdk, bcx, api: bcx.getModApi?.(modId) ?? bcx.getModApi?.(), MOD_ID, FULL_NAME, VERSION };
         }
         catch {
-            api = bcx.getModApi?.();
-        }
-        if (!api) {
-            await waitFor(() => {
+            // Si l’appel jette alors que bcx vient juste d’arriver, on réessaie un peu
+            for (let i = 0; i < 20; i++) {
+                await new Promise(r => setTimeout(r, 200));
                 try {
-                    return bcx.getModApi?.(MOD_ID);
+                    return { sdk, bcx, api: bcx.getModApi?.(modId) ?? bcx.getModApi?.(), MOD_ID, FULL_NAME, VERSION };
                 }
-                catch {
-                    return false;
-                }
-            }, 200, 5000);
-            try {
-                api = bcx.getModApi?.(MOD_ID);
+                catch { /* retry */ }
             }
-            catch {
-                api = bcx.getModApi?.();
-            }
-        }
-        if (!api) {
-            console.warn('[%s] BCX API non disponible. Le mod restera inactif.', MOD_ID);
             return null;
         }
-        return { sdk, bcx, api, MOD_ID, FULL_NAME, VERSION };
+    }
+    async function initSDK() {
+        const ctx = await getBCXApi(MOD_ID, 60000);
+        if (!ctx || !ctx.api) {
+            console.warn('[%s] BCX API non disponible pour l’instant. Le mod restera en veille et réessaiera quand bcx/modsdk apparaîtront.', MOD_ID);
+            // Fallback: retente automatiquement dès que l’un des globals est défini
+            setTimeout(() => initSDK().catch(() => { }), 2000);
+            return null;
+        }
+        return ctx;
     }
 
     var bcmodsdk = {};
@@ -378,9 +412,9 @@
         ui.status.textContent = "Initialisation du SDK…";
         const ctx = await initSDK();
         if (!ctx)
-            return;
+            return; // reste silencieux si pas prêt
         try {
-            const api = await getBCXApi('MOD_NAME', 30000); // mets le nom réel de ton add‑on
+            const api = await getBCXApi$1("BCXTimeSaver", 30000); // mets le nom réel de ton add‑on
             ui.status.textContent = "BCX détecté. Récupération de toutes les règles…";
             let allRules = await enumerateAllRules(api);
             if (!allRules.length) {
