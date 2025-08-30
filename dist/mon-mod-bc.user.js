@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         BCX Time SaverRRR
+// @name         BCXTimeSaver
 // @namespace    bcx
 // @version      0.1.1
 // @description  Helpers pour Bondage Club
