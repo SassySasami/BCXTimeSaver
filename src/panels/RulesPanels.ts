@@ -203,7 +203,7 @@ export async function bootRulesPanelWhenReady() {
   await waitFor(() => !!(document.body && document.querySelector("canvas")));
   // 2) Attendre que BCX soit (probablement) chargé, sans bloquer définitivement
   try {
-    await waitForBCX(45000);
+    await waitForBCX("BCXTimeSaver", 10000);
   } catch {
     // pas grave: le panneau fonctionnera en "aucune règle" tant que BCX n’est pas prêt
   }

@@ -1,17 +1,40 @@
-// src/types/global.d.ts
-export {};
+// src/types/global-bcx.d.ts
+import type { ModSDKGlobalAPI } from 'bondage-club-mod-sdk';
 
 declare global {
-  interface BCXHost {
-    getModApi?: (name: string) => any | null | undefined;
-    getModuleApi?: (name: string) => any | null | undefined;
-    [k: string]: any;
+  interface Window {
+    bcModSDK?: ModSDKGlobalAPI;
+    // BCX expose un objet "bcx" avec getModApi
+    bcx?: {
+      getModApi?: (modName: string) => any | Promise<any>;
+    };
   }
 
-  interface Window {
-    bcx?: BCXHost; // minuscule
-    BCX?: BCXHost; // majuscule (au cas où)
-    unsafeWindow?: Window; // userscript environnements
-    wrappedJSObject?: Window; // Firefox
+  // Types "minimaux" pour ce qu'on utilise
+  namespace BCX {
+    interface Player { id: number; name?: string }
+    interface Rule {
+      id: string;
+      name: string;
+      description?: string;
+      enforcedBy?: string;
+      active?: boolean;
+      category?: string;
+    }
+    interface RulesApi {
+      getActiveRulesFor?: (characterId: number) => Promise<Rule[]>;
+      getRulesFor?: (characterId: number) => Promise<Rule[]>;
+    }
+    interface Api {
+      version?: string;
+      player?: Player | (() => Player | Promise<Player>);
+      getPlayer?: () => Player | Promise<Player>;
+      rules?: RulesApi;
+      // fallback possibles
+      getActiveRulesFor?: (characterId: number) => Promise<Rule[]>;
+      getRulesFor?: (characterId: number) => Promise<Rule[]>;
+    }
   }
 }
+
+export {};
