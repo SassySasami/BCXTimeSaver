@@ -2,23 +2,17 @@
 import { getBCXApi } from './bcx';
 import { buildUI, renderRules } from "./ui";
 import { enumerateAllRules } from "./rules";
+import { initSDK } from './sdk';
 import bcModSDK from 'bondage-club-mod-sdk';
 
 async function bootstrap() {
   const ui = buildUI();
+  ui.status.textContent = "Initialisation du SDK…";
+  const ctx = await initSDK();
+  if (!ctx) return;
 
-  const MOD_NAME = 'BCXTimeSaver';
-  try {
-    const mod = bcModSDK.registerMod({
-      name: MOD_NAME,
-      fullName: 'Mon Mod Bondage Club',
-      version: '0.3.0',
-      repository: 'https://github.com/SassySasami/BCTest',
-    });
-    console.log('[MonModBC] Mod chargé via SDK:', mod);
-  } catch (e) {
-    console.warn('[MonModBC] SDK indisponible (non bloquant):', e);
-  }
+  const { api, MOD_ID } = ctx;
+
   
   try {
 

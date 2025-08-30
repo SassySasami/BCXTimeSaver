@@ -6,7 +6,7 @@ const meta = `// ==UserScript==
 // @name         BCXTimeSaver
 // @namespace    bcx
 // @version      0.1.1
-// @description  Helpers pour Bondage Club
+// @description  Helpers pour Bondage Clubbbbbb
 // @match        https://*.bondageprojects.elementfx.com/R*/*
 // @match        https://*.bondage-europe.com/R*/*
 // @match        https://*.bondageprojects.com/R*/*
