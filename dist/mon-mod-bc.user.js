@@ -90,8 +90,7 @@
     // src/main.ts
     async function boot() {
         try {
-            registerWithSDK(findModSDK());
-            const api = await waitForBcxModApi('BCXTimeSaver'); // <= clé: utilise window.bcx.getModApi('BCX')
+            const api = await waitForBcxModApi('BCX'); // <= clé: utilise window.bcx.getModApi('BCX')
             console.debug('[BCX TS] API récupérée via getModApi:', api?.version ?? '(sans version)');
             const panel = document.createElement('bcx-ts-panel');
             document.documentElement.appendChild(panel);
@@ -111,6 +110,7 @@
             alert('BCX Time Saver: impossible de démarrer (voir console).');
         }
     }
+    registerWithSDK(findModSDK());
     if (document.readyState === 'loading')
         document.addEventListener('DOMContentLoaded', boot);
     else
