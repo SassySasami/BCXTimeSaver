@@ -3,7 +3,7 @@ import commonjs from '@rollup/plugin-commonjs';
 import typescript from '@rollup/plugin-typescript';
 
 const meta = `// ==UserScript==
-// @name         BCX Time Saver
+// @name         BCX Time SaverRRR
 // @namespace    bcx
 // @version      0.1.1
 // @description  Helpers pour Bondage Club
